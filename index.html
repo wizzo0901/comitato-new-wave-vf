@@ -104,36 +104,38 @@
                 </div>
                 
                 <div class="form-group">
-                    <label>Aggiungi Media (Opzionale)</label>
+                    <label>Aggiungi Media (Opzionale) - Usa Google Drive</label>
                     <div class="media-type-selector">
                         <div class="media-type-btn active" data-type="none">Nessun Media</div>
                         <div class="media-type-btn" data-type="image">Immagine</div>
                         <div class="media-type-btn" data-type="video">Video</div>
                     </div>
                     
-                    <div id="imageUpload" class="file-upload" style="display: none;">
-                        <i class="fas fa-image"></i>
-                        <p>Clicca per selezionare un'immagine</p>
-                        <p><small>Formati supportati: JPG, PNG, GIF (Max 5MB)</small></p>
-                        <input type="file" id="newsImage" accept="image/*">
+                    <!-- Campo URL Google Drive -->
+                    <div id="mediaUrlInput" style="display: none; margin-top: 15px;">
+                        <label for="externalMediaUrl">URL Google Drive</label>
+                        <input type="url" id="externalMediaUrl" class="form-control" 
+                               placeholder="Incolla il link di condivisione Google Drive">
+                        <small class="form-text text-muted">
+                            📖 Istruzioni: Carica il file su Drive → Condividi → "Chiunque con il link" → Copia link
+                        </small>
+                        
+                        <!-- Anteprima -->
+                        <div class="media-preview-container" style="margin-top: 15px;">
+                            <div id="imagePreview" class="media-preview" style="display: none;">
+                                <img id="previewImage" src="" alt="Anteprima immagine" style="max-width: 100%; border-radius: 8px;">
+                            </div>
+                            <div id="videoPreview" class="media-preview" style="display: none;">
+                                <video id="previewVideo" controls style="max-width: 100%; border-radius: 8px;">
+                                    Il tuo browser non supporta il video.
+                                </video>
+                            </div>
+                        </div>
                     </div>
-                    
-                    <div id="videoUpload" class="file-upload" style="display: none;">
-                        <i class="fas fa-video"></i>
-                        <p>Clicca per selezionare un video</p>
-                        <p><small>Formati supportati: MP4, WebM (Max 100MB)</small></p>
-                        <input type="file" id="newsVideo" accept="video/*">
-                    </div>
-                    
-                    <div id="imagePreview" class="media-preview">
-                        <img id="previewImage" src="" alt="Anteprima immagine">
-                    </div>
-                    
-                    <div id="videoPreview" class="media-preview">
-                        <video id="previewVideo" controls>
-                            Il tuo browser non supporta la riproduzione di video.
-                        </video>
-                    </div>
+
+                    <!-- Rimuovi upload file locali -->
+                    <!-- <div id="imageUpload" class="file-upload" style="display: none;"> ... </div> -->
+                    <!-- <div id="videoUpload" class="file-upload" style="display: none;"> ... </div> -->
                 </div>
                 
                 <button type="submit" class="cta-button" style="width: 100%;">Aggiungi Novità</button>
@@ -200,8 +202,8 @@
                     <button class="btn btn-success" id="addNewsBtn">Aggiungi Novità</button>
                     <button class="btn btn-warning" id="viewQuestionsBtn">Visualizza Domande</button>
                     <button class="btn btn-warning" id="editLinkBtn">Configura Link</button>
-                    <button class="btn btn-primary" id="refreshNowBtn">
-                        <i class="fas fa-sync"></i> Aggiorna Ora
+                    <button class="btn btn-info" id="syncDriveBtn">
+                        <i class="fas fa-sync"></i> Sincronizza Drive
                     </button>
                     <button class="btn btn-danger" id="logoutBtn">Logout</button>
                 </div>
