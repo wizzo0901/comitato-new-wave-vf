@@ -1,217 +1,496 @@
 // ==============================
-// CONFIGURAZIONE GITHUB AGGIORNATA
+// CONFIGURAZIONE GOOGLE DRIVE
 // ==============================
 
-const GITHUB_CONFIG = {
-    username: 'Wizzo0901',
-    repo: 'comitato-newwave',
-    branch: 'main',
-    // ✅ USA QUESTO TOKEN - è un fine-grained token più sicuro
-    token: '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',
-    dataPath: 'data/'
+const DRIVE_CONFIG = {
+    NEWS_JSON: 'https://drive.google.com/uc?export=download&id=1PAzAdsmPTaBUdNBEYuv_AFLr7TGxDCSZ',
+    QUESTIONS_JSON: 'https://drive.google.com/uc?export=download&id=1uovrNEF2D1XNMUKPHTzUSad-DwjXGLSO',
+    CONTENT_JSON: 'https://drive.google.com/uc?export=download&id=1Jk_MBRqMXYnLhR8t8SdpfjRmpCOZKpfI'
 };
 
 // ==============================
-// FUNZIONI GITHUB AGGIORNATE PER FINE-GRAINED TOKENS
+// VARIABILI GLOBALI
 // ==============================
 
-async function saveToGitHub(filename, data) {
-    console.log('💾 Salvataggio su GitHub:', filename);
-    
+let isAdmin = false;
+let news = [];
+let questions = [];
+let customLinkConfig = { url: "#", text: "Link Aggiuntivo" };
+
+// ==============================
+// FUNZIONI PRINCIPALI DRIVE
+// ==============================
+
+// Carica dati da Google Drive
+async function loadFromDrive(url) {
     try {
-        const jsonString = JSON.stringify(data, null, 2);
-        // Codifica Base64 corretta
-        const content = btoa(unescape(encodeURIComponent(jsonString)));
-        
-        const url = `https://api.github.com/repos/${GITHUB_CONFIG.username}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.dataPath}${filename}`;
-        
-        console.log('🔍 Verifico file esistente...');
-        
-        // PRIMA verifica se il file esiste
-        let sha = null;
-        
-        try {
-            const existingResponse = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${GITHUB_CONFIG.token}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'X-GitHub-Api-Version': '2022-11-28'
-                }
-            });
-            
-            if (existingResponse.status === 200) {
-                const existingData = await existingResponse.json();
-                sha = existingData.sha;
-                console.log('📁 File esistente trovato, SHA:', sha ? 'presente' : 'null');
-            } else if (existingResponse.status === 404) {
-                console.log('📝 File non esistente, creazione nuovo');
-            } else {
-                console.error('❌ Errore verifica file:', existingResponse.status);
-                const errorText = await existingResponse.text();
-                console.error('Dettaglio errore:', errorText);
-            }
-        } catch (e) {
-            console.error('❌ Errore nella verifica esistenza file:', e);
-        }
-        
-        console.log('🚀 Invio dati a GitHub...');
-        
-        const requestBody = {
-            message: `Aggiornamento ${filename} - ${new Date().toLocaleString('it-IT')}`,
-            content: content,
-            branch: GITHUB_CONFIG.branch
-        };
-        
-        // Aggiungi SHA solo se il file esiste
-        if (sha) {
-            requestBody.sha = sha;
-        }
-        
-        const response = await fetch(url, {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${GITHUB_CONFIG.token}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/vnd.github.v3+json',
-                'X-GitHub-Api-Version': '2022-11-28'
-            },
-            body: JSON.stringify(requestBody)
-        });
-        
-        console.log('📡 Risposta GitHub:', response.status);
+        console.log('📥 Caricamento da:', url);
+        const cacheBusterUrl = `${url}&t=${Date.now()}`;
+        const response = await fetch(cacheBusterUrl);
         
         if (response.ok) {
-            const result = await response.json();
-            console.log('✅ Salvataggio completato! Commit:', result.commit.sha.substring(0, 7));
-            return true;
+            const data = await response.json();
+            console.log('✅ Dati caricati');
+            return data;
         } else {
-            const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-            console.error('❌ Errore GitHub dettagliato:', {
-                status: response.status,
-                message: errorData.message,
-                documentation: errorData.documentation_url
-            });
-            
-            if (response.status === 401) {
-                throw new Error('TOKEN NON AUTORIZZATO: Verifica che il token abbia i permessi per questa repository');
-            } else if (response.status === 403) {
-                throw new Error('PERMESSI INSUFFICIENTI: Il token potrebbe essere un fine-grained token - verifica i permessi');
-            } else if (response.status === 404) {
-                throw new Error('REPOSITORY NON TROVATA: Verifica che la repository esista e sia pubblica');
-            } else {
-                throw new Error(`Errore GitHub ${response.status}: ${errorData.message}`);
-            }
+            console.error('❌ Errore HTTP:', response.status);
+            return null;
         }
         
     } catch (error) {
-        console.error('❌ Errore salvataggio GitHub:', error);
-        
-        // Salvataggio di emergenza locale
-        const backupKey = `backup_${filename}_${Date.now()}`;
-        try {
-            localStorage.setItem(backupKey, JSON.stringify({
-                data: data,
-                timestamp: new Date().toISOString(),
-                error: error.message
-            }));
-            console.log('📱 Backup locale salvato:', backupKey);
-        } catch (e) {
-            console.error('❌ Impossibile salvare backup locale:', e);
-        }
-        
+        console.error('❌ Errore caricamento Drive:', error);
+        return null;
+    }
+}
+
+// Salva dati localmente (poi dovrai aggiornare manualmente i file su Drive)
+function saveToLocalStorage(filename, data) {
+    try {
+        localStorage.setItem(`drive_${filename}`, JSON.stringify({
+            data: data,
+            timestamp: Date.now(),
+            synced: false
+        }));
+        console.log('📱 Dati salvati localmente:', filename);
+        return true;
+    } catch (e) {
+        console.error('❌ Errore salvataggio locale:', e);
         return false;
     }
 }
 
-// Funzione per testare la connessione
-async function testGitHubConnection() {
-    console.log('🔍 Test connessione GitHub...');
-    
+// Carica dati locali
+function loadFromLocalStorage(filename, defaultValue = null) {
     try {
-        const testUrl = `https://api.github.com/repos/${GITHUB_CONFIG.username}/${GITHUB_CONFIG.repo}`;
-        const response = await fetch(testUrl, {
-            headers: {
-                'Authorization': `Bearer ${GITHUB_CONFIG.token}`,
-                'Accept': 'application/vnd.github.v3+json',
-                'X-GitHub-Api-Version': '2022-11-28'
-            }
-        });
-        
-        if (response.ok) {
-            const repoInfo = await response.json();
-            console.log('✅ Repository accessibile:', repoInfo.full_name);
-            console.log('👀 Visibilità:', repoInfo.visibility);
-            console.log('📊 Ultimo aggiornamento:', repoInfo.updated_at);
-            return true;
-        } else {
-            console.error('❌ Repository non accessibile. Status:', response.status);
-            
-            if (response.status === 401) {
-                console.error('🔐 Errore 401 - Possibili cause:');
-                console.error('   • Token scaduto o revocato');
-                console.error('   • Token senza permessi sufficienti');
-                console.error('   • Repository privata senza accesso');
-            } else if (response.status === 404) {
-                console.error('🔍 Errore 404 - Repository non trovata');
-                console.error('   • Verifica che la repository esista');
-                console.error('   • Verifica username e nome repository');
-            }
-            
-            return false;
+        const stored = localStorage.getItem(`drive_${filename}`);
+        if (stored) {
+            return JSON.parse(stored).data;
         }
-    } catch (error) {
-        console.error('❌ Errore di connessione:', error.message);
-        return false;
+    } catch (e) {
+        console.error('❌ Errore caricamento locale:', e);
     }
+    return defaultValue;
 }
 
-// Funzione per inizializzare la repository
-async function initializeGitHubRepository() {
-    console.log('🚀 Inizializzazione repository GitHub...');
-    
-    const connectionOk = await testGitHubConnection();
-    if (!connectionOk) {
-        console.error('❌ Impossibile inizializzare: connessione fallita');
-        return false;
-    }
-    
-    const initialFiles = {
-        'news.json': [],
-        'questions.json': [],
-        'content.json': {
-            heroTitle: "COMITATO STUDENTESCO NEW WAVE",
-            heroText: "L'onda del cambiamento nella tua scuola. Innovazione, rappresentanza e partecipazione attiva per tutti gli studenti.",
-            customLink: {
-                url: "#",
-                text: "Link Aggiuntivo"
-            }
-        }
+// ==============================
+// FUNZIONI APPLICAZIONE
+// ==============================
+
+// Aggiungi novità
+async function addNews(title, date, content, mediaType = 'none', mediaUrl = '') {
+    const newNews = {
+        id: Date.now(),
+        title,
+        date,
+        content,
+        mediaType,
+        mediaUrl,
+        createdAt: new Date().toISOString()
     };
 
-    let allSuccess = true;
+    // Carica news esistenti (prima da Drive, poi da locale)
+    let existingNews = await loadFromDrive(DRIVE_CONFIG.NEWS_JSON);
+    if (!existingNews) {
+        existingNews = loadFromLocalStorage('news.json', []);
+    }
     
-    for (const [filename, data] of Object.entries(initialFiles)) {
-        console.log(`📝 Inizializzo ${filename}...`);
-        const success = await saveToGitHub(filename, data);
+    const updatedNews = [newNews, ...existingNews];
+    
+    // Salva localmente
+    const success = saveToLocalStorage('news.json', updatedNews);
+    
+    if (success) {
+        news = updatedNews;
+        renderNews();
+        showSuccess('Novità pubblicata! (Salvata localmente)');
         
-        if (success) {
-            console.log(`✅ ${filename} inizializzato`);
+        // Mostra istruzioni per aggiornare Drive
+        showDriveUpdateInstructions('news.json', updatedNews);
+    }
+    
+    return success;
+}
+
+// Aggiungi domanda
+async function addQuestion(questionText) {
+    const newQuestion = {
+        id: Date.now(),
+        text: questionText,
+        date: new Date().toISOString().split('T')[0],
+        createdAt: new Date().toISOString()
+    };
+
+    let existingQuestions = await loadFromDrive(DRIVE_CONFIG.QUESTIONS_JSON);
+    if (!existingQuestions) {
+        existingQuestions = loadFromLocalStorage('questions.json', []);
+    }
+    
+    const updatedQuestions = [...existingQuestions, newQuestion];
+    
+    const success = saveToLocalStorage('questions.json', updatedQuestions);
+    
+    if (success) {
+        questions = updatedQuestions;
+        if (isAdmin) renderQuestions();
+        showSuccess('Domanda inviata! (Salvata localmente)');
+        showDriveUpdateInstructions('questions.json', updatedQuestions);
+    }
+    
+    return success;
+}
+
+// Aggiorna contenuti
+async function updateContent(updates) {
+    let existingContent = await loadFromDrive(DRIVE_CONFIG.CONTENT_JSON);
+    if (!existingContent) {
+        existingContent = loadFromLocalStorage('content.json', {});
+    }
+    
+    const updatedContent = { ...existingContent, ...updates };
+    
+    const success = saveToLocalStorage('content.json', updatedContent);
+    
+    if (success) {
+        // Aggiorna UI
+        if (updates.heroTitle) heroTitle.textContent = updates.heroTitle;
+        if (updates.heroText) heroText.textContent = updates.heroText;
+        if (updates.customLink) {
+            customLinkConfig = updates.customLink;
+            updateCustomLink();
+        }
+        showSuccess('Contenuto aggiornato! (Salvato localmente)');
+        showDriveUpdateInstructions('content.json', updatedContent);
+    }
+    
+    return success;
+}
+
+// ==============================
+// CARICAMENTO DATI
+// ==============================
+
+async function loadAllData() {
+    console.log('🔄 Caricamento tutti i dati...');
+    
+    try {
+        // Prova a caricare da Drive
+        const [newsData, contentData, questionsData] = await Promise.all([
+            loadFromDrive(DRIVE_CONFIG.NEWS_JSON),
+            loadFromDrive(DRIVE_CONFIG.CONTENT_JSON),
+            loadFromDrive(DRIVE_CONFIG.QUESTIONS_JSON)
+        ]);
+        
+        // Se Drive non funziona, carica da locale
+        if (newsData) {
+            news = newsData;
+            console.log('📰 News caricate da Drive:', news.length);
         } else {
-            console.error(`❌ ${filename} fallito`);
-            allSuccess = false;
+            news = loadFromLocalStorage('news.json', []);
+            console.log('📰 News caricate da locale:', news.length);
         }
         
-        // Aspetta un po' tra una richiesta e l'altra
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (contentData) {
+            if (contentData.heroTitle) heroTitle.textContent = contentData.heroTitle;
+            if (contentData.heroText) heroText.textContent = contentData.heroText;
+            if (contentData.customLink) {
+                customLinkConfig = contentData.customLink;
+                updateCustomLink();
+            }
+            console.log('📖 Contenuto caricato da Drive');
+        } else {
+            const localContent = loadFromLocalStorage('content.json', {});
+            if (localContent.heroTitle) heroTitle.textContent = localContent.heroTitle;
+            if (localContent.heroText) heroText.textContent = localContent.heroText;
+            if (localContent.customLink) {
+                customLinkConfig = localContent.customLink;
+                updateCustomLink();
+            }
+            console.log('📖 Contenuto caricato da locale');
+        }
+        
+        if (questionsData) {
+            questions = questionsData;
+            console.log('❓ Domande caricate da Drive:', questions.length);
+        } else {
+            questions = loadFromLocalStorage('questions.json', []);
+            console.log('❓ Domande caricate da locale:', questions.length);
+        }
+        
+        // Renderizza
+        renderNews();
+        if (isAdmin) {
+            renderQuestions();
+        }
+        
+        console.log('✅ Tutti i dati caricati');
+        
+    } catch (error) {
+        console.error('❌ Errore caricamento dati:', error);
+        // Fallback completo a dati locali
+        loadLocalFallback();
+    }
+}
+
+function loadLocalFallback() {
+    console.log('🔄 Caricamento fallback da localStorage...');
+    
+    news = loadFromLocalStorage('news.json', []);
+    questions = loadFromLocalStorage('questions.json', []);
+    const content = loadFromLocalStorage('content.json', {});
+    
+    if (content.heroTitle) heroTitle.textContent = content.heroTitle;
+    if (content.heroText) heroText.textContent = content.heroText;
+    if (content.customLink) {
+        customLinkConfig = content.customLink;
+        updateCustomLink();
     }
     
-    if (allSuccess) {
-        console.log('🎉 Repository inizializzata con successo!');
-        alert('Repository GitHub inizializzata con successo! 🎉');
-    } else {
-        console.log('⚠️ Repository parzialmente inizializzata');
-        alert('Repository inizializzata parzialmente. Controlla la console per i dettagli.');
+    renderNews();
+    if (isAdmin) renderQuestions();
+}
+
+// ==============================
+// FUNZIONI UI
+// ==============================
+
+function renderNews() {
+    newsGrid.innerHTML = '';
+    
+    if (news.length === 0) {
+        newsGrid.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-newspaper"></i>
+                <h3>Nessuna novità al momento</h3>
+                <p>Torna presto per aggiornamenti!</p>
+            </div>
+        `;
+        return;
     }
     
-    return allSuccess;
+    news.forEach(item => {
+        const newsItem = document.createElement('div');
+        newsItem.className = 'novita-item';
+        
+        let actionsHTML = '';
+        if (isAdmin) {
+            actionsHTML = `
+                <div class="novita-actions">
+                    <button class="btn btn-danger delete-news-btn" data-id="${item.id}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+        }
+        
+        let mediaHTML = '';
+        if (item.mediaType === 'image' && item.mediaUrl) {
+            mediaHTML = `
+                <div class="media-container">
+                    <img src="${item.mediaUrl}" alt="${item.title}" 
+                         onerror="this.style.display='none'"
+                         style="max-width: 100%; border-radius: 8px;">
+                </div>
+            `;
+        } else if (item.mediaType === 'video' && item.mediaUrl) {
+            mediaHTML = `
+                <div class="media-container">
+                    <video controls style="max-width: 100%; border-radius: 8px;">
+                        <source src="${item.mediaUrl}" type="video/mp4">
+                        Il tuo browser non supporta il video.
+                    </video>
+                </div>
+            `;
+        }
+        
+        newsItem.innerHTML = `
+            ${actionsHTML}
+            <h3>${item.title}</h3>
+            <div class="date">
+                <i class="far fa-calendar"></i> ${formatDate(item.date)}
+            </div>
+            ${mediaHTML}
+            <p>${item.content}</p>
+        `;
+        newsGrid.appendChild(newsItem);
+    });
+
+    if (isAdmin) {
+        document.querySelectorAll('.delete-news-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = parseInt(this.getAttribute('data-id'));
+                deleteNews(id);
+            });
+        });
+    }
+}
+
+function renderQuestions() {
+    questionsList.innerHTML = '';
+    
+    if (questions.length === 0) {
+        questionsList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-question-circle"></i>
+                <h3>Nessuna domanda ricevuta</h3>
+                <p>Non ci sono ancora domande da visualizzare.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    questions.forEach(question => {
+        const questionItem = document.createElement('div');
+        questionItem.className = 'question-item';
+        questionItem.innerHTML = `
+            <div class="question-header">
+                <div>
+                    <div class="question-text">${question.text}</div>
+                    <div class="question-date">Ricevuta il: ${formatDate(question.date)}</div>
+                </div>
+                <div class="question-actions">
+                    <button class="btn btn-danger delete-question-btn" data-id="${question.id}">Elimina</button>
+                </div>
+            </div>
+        `;
+        questionsList.appendChild(questionItem);
+    });
+
+    document.querySelectorAll('.delete-question-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = parseInt(this.getAttribute('data-id'));
+            deleteQuestion(id);
+        });
+    });
+}
+
+function formatDate(dateString) {
+    const options = { day: '2-digit', month: '2-digit', year: 'numeric' };
+    return new Date(dateString).toLocaleDateString('it-IT', options);
+}
+
+function updateCustomLink() {
+    customLink.href = customLinkConfig.url;
+    customLinkText.textContent = customLinkConfig.text;
+}
+
+// Elimina news
+async function deleteNews(id) {
+    if (!confirm('Sei sicuro di voler eliminare questa notizia?')) return;
+    
+    const updatedNews = news.filter(n => n.id !== id);
+    const success = saveToLocalStorage('news.json', updatedNews);
+    
+    if (success) {
+        news = updatedNews;
+        renderNews();
+        showSuccess('News eliminata! (Aggiornata localmente)');
+        showDriveUpdateInstructions('news.json', updatedNews);
+    }
+}
+
+// Elimina domanda
+async function deleteQuestion(id) {
+    if (!confirm('Sei sicuro di voler eliminare questa domanda?')) return;
+    
+    const updatedQuestions = questions.filter(q => q.id !== id);
+    const success = saveToLocalStorage('questions.json', updatedQuestions);
+    
+    if (success) {
+        questions = updatedQuestions;
+        renderQuestions();
+        showSuccess('Domanda eliminata! (Aggiornata localmente)');
+        showDriveUpdateInstructions('questions.json', updatedQuestions);
+    }
+}
+
+// ==============================
+// ISTRUZIONI AGGIORNAMENTO DRIVE
+// ==============================
+
+function showDriveUpdateInstructions(filename, data) {
+    if (!isAdmin) return;
+    
+    const dataStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const message = `
+📝 <strong>Aggiornamento Google Drive Richiesto</strong><br><br>
+Per sincronizzare i cambiamenti con tutti gli utenti:<br>
+1. <strong>SCARICA</strong> il file aggiornato: <a href="${url}" download="${filename}">Clicca qui per scaricare ${filename}</a><br>
+2. <strong>CARICALO</strong> su Google Drive sostituendo il file vecchio<br>
+3. <strong>CONDIVIDI</strong> come "Chiunque con il link"<br><br>
+<small>I dati sono già salvati localmente, ma solo aggiornando Drive saranno visibili a tutti.</small>
+    `;
+    
+    showModalMessage(message, 'Aggiornamento Drive');
+}
+
+function showModalMessage(message, title = 'Informazione') {
+    const modal = document.createElement('div');
+    modal.className = 'modal active';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.5); display: flex; align-items: center;
+        justify-content: center; z-index: 10000;
+    `;
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="background: white; padding: 2rem; border-radius: 10px; max-width: 500px; margin: 1rem;">
+            <h3>${title}</h3>
+            <div>${message}</div>
+            <button onclick="this.closest('.modal').remove()" 
+                    style="margin-top: 1rem; padding: 0.5rem 1rem; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                Chiudi
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+// ==============================
+// FUNZIONI UTILITY
+// ==============================
+
+function showSuccess(message) {
+    alert('✅ ' + message);
+}
+
+function showError(message) {
+    alert('❌ ' + message);
+}
+
+function showLoading(message) {
+    // Puoi implementare un loader migliore
+    console.log('⏳ ' + message);
+}
+
+// ==============================
+// INIZIALIZZAZIONE
+// ==============================
+
+async function initializeApp() {
+    console.log('🚀 Avvio Comitato New Wave - Google Drive');
+    
+    // Carica sicurezza
+    loadSecurityState();
+    updateSecurityUI();
+    checkLoginStatus();
+    
+    // Setup UI
+    setupEventListeners();
+    setupMediaHandlers();
+    
+    // Carica dati
+    await loadAllData();
+    
+    console.log('✅ App inizializzata con Google Drive');
+}
+
+// Avvia l'app
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+    initializeApp();
 }
